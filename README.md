@@ -200,8 +200,6 @@ The notebook produces
 ```
 .
 ├── Downscale.ipynb          # Complete modeling workflow
-├── data/                    # Input datasets
-├── outputs/                 # Prediction results
 └── README.md
 ```
 
