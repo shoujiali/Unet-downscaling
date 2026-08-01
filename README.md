@@ -1,206 +1,89 @@
-# Hurricane Flood Depth Downscaling Using Deep Learning
+# DIEP semantic flood downscaling
 
-## Overview
-
-This repository presents a deep learning framework for predicting hurricane-induced flood water depth using multiple environmental and meteorological variables. The workflow integrates precipitation, temperature, wind, storm surge, and terrain information to estimate localized flood depth at the ZIP Code level.
-
-The model is implemented using a U-Net convolutional neural network that learns the nonlinear relationship between hurricane characteristics and observed flood depth. The notebook provides an end-to-end pipeline including data preparation, model training, prediction, and visualization.
-
----
+This project converts geolocated Hurricane Harvey tweet text into 11 interpretable
+disaster-impact probability rasters, then combines them with environmental variables in a
+supervised U-Net that predicts fine-resolution flood depth.
 
 ## Workflow
 
-```
-Environmental Datasets
-        │
-        ▼
- Data Preparation
-        │
-        ▼
- Feature Engineering
-        │
-        ▼
-   U-Net Training
-        │
-        ▼
- Flood Depth Prediction
-        │
-        ▼
- Visualization & Evaluation
-```
+Tweet text is cleaned and passed through the five Harvey BERT multi-head checkpoints. Fold
+probabilities are averaged in tweet order, spatially weighted by bounding-box precision,
+distributed across covered cells, and saved as a channel-first semantic cube. The cube is
+aligned with the flood target grid, normalized per channel, and concatenated with coarse water
+depth, precipitation, wind, DEM, and slope. The original spatial block five-fold workflow,
+masked MSE plus smoothness loss, early stopping, overlap prediction, Texas clipping, and
+GeoTIFF export are retained.
 
----
+No raw 768-dimensional BERT embeddings are used as U-Net inputs.
 
-## Data Sources
+## Inputs
 
-The model combines observed flood information with multiple environmental datasets describing hurricane characteristics and terrain conditions.
+Set all paths in the first configuration cell of
+`DIEP_semantic_downscaling.ipynb`. The tweet table must contain:
 
-### Target Variable
+- `text` (configurable)
+- `lon_min`, `lat_min`, `lon_max`, `lat_max` (configurable), or the original `place` field
 
-**Observed Water Depth**
+Environmental inputs are the 0.025-degree target depth, 0.1-degree coarse depth,
+precipitation, wind, one or more DEM tiles, and a Texas boundary dataset. An optional existing
+single flood-relevance raster enables experiment E2.
 
-Observed flood water depth was obtained from the **OpenFEMA** Individual Assistance Housing Registrants dataset.
+## Harvey model files
 
-- Variable: **waterDepth**
-- Unit: Inches
-- Description: Reported flood water depth associated with FEMA assistance records. Most observations are recorded in inches, while a small number were originally reported in feet and converted during preprocessing.
-- Geographic identifiers include ZIP Code, Census Tract, Census Block Group, and Census Block.
+The source Harvey notebook defines `bert-base-uncased`, 11 sigmoid heads, and the checkpoint
+convention:
 
-Dataset DOI: https://doi.org/10.7266/n90stx2y
-
----
-
-### Predictor Variables
-
-| Variable | Source | Description |
-|----------|---------|------------|
-| Hurricane_Totals | PRISM Climate Group | Total accumulated precipitation during each hurricane event |
-| Hurricane_Wind | NOAA NCEI | Maximum wind speed |
-| Hurricane_TMax | NOAA NCEI | Maximum air temperature |
-| Hurricane_TMin | NOAA NCEI | Minimum air temperature |
-| Hurricane_Pre | NOAA NCEI | Total precipitation measured by weather stations |
-| Hurricane_CERA | Coastal Emergency Risks Assessment (CERA) | Maximum modeled storm surge inundation |
-| Elevation | USGS 1-arcsecond Digital Elevation Model | Bare-earth elevation |
-
----
-
-### Geographic Processing
-
-ZIP Code boundaries were standardized using both the **2010** and **2020 Census ZIP Code Tabulation Areas (ZCTAs)** obtained from the ESRI Federal Data collection.
-
-- Hurricanes occurring before 2020 were matched using the 2010 ZIP Code boundaries.
-- Hurricanes occurring during and after 2020 used the updated 2020 ZIP Code boundaries.
-
-This approach ensures spatial consistency across historical hurricane events.
-
----
-
-## Data Preparation
-
-Prior to model training, all datasets were processed into a common analysis framework.
-
-### Precipitation
-
-Daily precipitation rasters were downloaded from the **PRISM Climate Group** for the duration of each hurricane event.
-
-The rasters were
-
-- clipped to the Texas state boundary,
-- accumulated using raster calculations,
-- converted into total storm precipitation for each hurricane.
-
----
-
-### Weather Variables
-
-Weather observations were obtained from the **National Centers for Environmental Information (NCEI)** for all NOAA climate stations in Texas between **2010 and 2024**.
-
-For each hurricane event, the following statistics were calculated:
-
-- Maximum wind speed
-- Maximum temperature
-- Minimum temperature
-- Total precipitation
-
-Continuous raster surfaces were generated using **Inverse Distance Weighting (IDW)** interpolation. Only stations with valid (>0) observations were included during interpolation.
-
----
-
-### Storm Surge
-
-Maximum storm surge inundation layers were obtained from the **Coastal Emergency Risks Assessment (CERA)** program.
-
-Each hurricane is represented by a single raster describing the maximum modeled coastal inundation depth during the entire event.
-
----
-
-### Elevation
-
-Terrain information was derived from the **USGS 1-arcsecond (~30 m) Digital Elevation Model**, which primarily incorporates LiDAR-derived elevation where available.
-
----
-
-### Feature Preparation
-
-Before model training, the notebook performs several preprocessing operations, including
-
-- loading environmental rasters,
-- aligning spatial datasets,
-- handling missing values,
-- feature normalization,
-- constructing predictor matrices,
-- preparing training samples for deep learning.
-
----
-
-## Deep Learning Model
-
-Flood depth estimation is formulated as a supervised image regression problem.
-
-A **U-Net** convolutional neural network is trained to learn the relationship between environmental conditions and observed flood depth.
-
-### Input Features
-
-The U-Net model uses six raster-based input channels:
-
-1. **Coarse-resolution water depth** (`water_01`)  
-   Flood water depth aggregated at a spatial resolution of 0.1°.
-
-2. **Cumulative precipitation** (`precip`)  
-   Total storm precipitation derived from PRISM climate data.
-
-3. **Maximum wind speed** (`wind`)  
-   Maximum hurricane-related wind speed over the event duration.
-
-4. **Elevation** (`DEM`)  
-   Bare-earth elevation derived from the USGS Digital Elevation Model.
-
-5. **Slope**  
-   Terrain slope calculated from the elevation raster.
-
-6. **Tweet density**  
-   A raster representation of geolocated tweet counts or density.
-
-### Target Variable
-
-The prediction target is the observed flood water depth raster at a spatial
-resolution of 0.025°.
-
-![1](https://github.com/shoujiali/Disaster-Impact-Estimation-Downscaling/blob/main/Unet/workflow.png)
-
----
-
-## Prediction
-
-After training, the model predicts flood water depth using the same environmental predictor variables.
-
-The prediction workflow consists of
-
-1. Loading the trained model.
-2. Preparing predictor variables.
-3. Generating prediction inputs.
-4. Estimating flood water depth.
-5. Producing spatial prediction maps.
-6. Comparing predicted and observed flood depths.
-
----
-
-## Outputs
-
-The notebook produces
-
-- Predicted flood depth maps
-
-![1](https://github.com/shoujiali/Disaster-Impact-Estimation-Downscaling/blob/main/Unet/Unet%20predicaition.png)
-
----
-
-## Repository Structure
-
-```
-.
-├── Downscale.ipynb          # Complete modeling workflow
-└── README.md
+```text
+Training_results/Harvey_5foldcv_BERT_Multihead_Deeper_512/
+  bert_model_fold_1.pth
+  ...
+  bert_model_fold_5.pth
 ```
 
----
+The target order is:
+
+```text
+homeOwnersInsurance, floodInsurance, destroyed, floodDamage, roofDamage,
+tsaEligible, tsaCheckedIn, rentalAssistanceEligible, repairAssistanceEligible,
+replacementAssistanceEligible, personalPropertyEligible
+```
+
+The training notebook shows a `768→512→128→1` head, but some exported fold files use
+`768→256→1`. The loader detects the hidden dimensions from each checkpoint and then performs
+strict loading. It does not silently ignore missing or unexpected parameters.
+
+## Running
+
+1. Install `requirements.txt` (Colab: `pip install -r requirements.txt`).
+2. Place `semantic_tweet_raster.py` and `flood_unet.py` beside the notebook.
+3. Fill unresolved paths in the central `CONFIG` dictionary.
+4. Run the notebook top to bottom. Missing private inputs fail early with explicit messages.
+
+The code is compatible with CPU and CUDA. If CUDA memory is exhausted, lower
+`unet_batch_size` or `patch_size`.
+
+## Raster outputs
+
+Outputs use the target grid and channel-first arrays internally. Semantic mean and optional
+sum cubes are multiband float32, LZW-compressed GeoTIFFs with one named band per target.
+Tweet count and semantic weight are single-band diagnostics. The final clipped flood-depth
+prediction uses the original target profile with `-9999` outside valid coverage.
+
+## Ablations
+
+- E0: environmental variables
+- E1: environmental variables + tweet count
+- E2: environmental variables + existing single flood-relevance raster
+- E3: environmental variables + 11 BERT semantic channels
+- E4: environmental variables + BERT semantic channels + tweet count
+
+Fold metrics include best epoch, MAE, RMSE, and R². A second table reports mean and standard
+deviation by experiment.
+
+## Methodological limitation
+
+This is a **tweet-level application of a model trained using ZIP-level aggregated
+disaster-impact labels**. It changes the inference unit and is not equivalent to tweet-level
+training or validation. Semantic outputs should be treated as model-derived proxy features.
+Global normalization is provided as a first implementation; training-fold-only statistics are
+preferable for strict cross-validation.
