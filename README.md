@@ -176,13 +176,6 @@ The semantic rasterization procedure produces one raster channel for each disast
   <b>Figure 3.</b> Examples of spatial semantic raster layers derived from disaster-related social media.
 </p>
 
-Recommended representative layers for visualization include:
-
-* Flood Damage
-* Destroyed
-* Roof Damage
-* Repair Assistance Eligible
-
 The complete semantic raster is stored in channel-first format:
 
 ```text
