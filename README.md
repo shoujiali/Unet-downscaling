@@ -294,7 +294,6 @@ Several input configurations can be evaluated under the same U-Net architecture 
 | ---------- | ---------------------- | ----------------------------- |
 | E0         | ✓                      | None                          |
 | E1         | ✓                      | Tweet Count                   |
-| E2         | ✓                      | Single Flood-Relevance Layer  |
 | E3         | ✓                      | Multi-channel Semantic Raster |
 | E4         | ✓                      | Semantic Raster + Tweet Count |
 
